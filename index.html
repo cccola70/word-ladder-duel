@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Word Ladder Duel</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <button id="helpBtn" type="button" class="icon-btn" title="How to play" aria-label="How to play">?</button>
+      <button id="muteBtn" type="button" class="icon-btn" title="Toggle sound" aria-label="Toggle sound">🔊</button>
+      <h1>Word Ladder Duel</h1>
+      <p class="tagline">Change one letter at a time to climb from START to GOAL.</p>
+      <p class="mode-badge" id="modeBadge">Random Puzzle</p>
+    </header>
+
+    <div class="stats-bar">
+      <div class="stat">
+        <span class="stat-label">Time</span>
+        <span class="stat-value" id="timer">60</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Moves</span>
+        <span class="stat-value" id="moves">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Par</span>
+        <span class="stat-value" id="par">-</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Score</span>
+        <span class="stat-value" id="score">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Streak</span>
+        <span class="stat-value" id="streak">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Best</span>
+        <span class="stat-value" id="best">0</span>
+      </div>
+    </div>
+
+    <div class="board" id="board">
+      <div class="goal-row">
+        <span class="row-label">GOAL</span>
+        <div class="tiles" id="goalTiles"></div>
+      </div>
+
+      <div class="ladder" id="ladder"></div>
+
+      <div class="input-row">
+        <span class="row-label">NEXT</span>
+        <div class="tiles" id="inputTiles"></div>
+      </div>
+
+      <form id="wordForm" autocomplete="off">
+        <div class="input-with-button">
+          <input type="text" id="wordInput" maxlength="8" placeholder="type next word, press Enter" />
+          <button type="submit" id="submitBtn">Submit</button>
+        </div>
+      </form>
+
+      <div class="message" id="message">&nbsp;</div>
+
+      <div class="controls">
+        <button id="pauseBtn" type="button">⏸ Pause</button>
+        <button id="hintBtn" type="button">Hint (-75 pts)</button>
+        <button id="giveUpBtn" type="button">Give Up</button>
+        <button id="newBtn" type="button">New Puzzle</button>
+        <button id="dailyBtn" type="button">Daily Puzzle</button>
+      </div>
+    </div>
+
+    <div class="overlay" id="pauseOverlay">
+      <div class="overlay-card">
+        <h2>Paused</h2>
+        <p>Your progress and timer are on hold. The puzzle is hidden so you can't stall for time.</p>
+        <div class="overlay-actions">
+          <button id="resumeBtn" type="button">Resume</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="overlay">
+      <div class="overlay-card">
+        <h2 id="overlayTitle">You solved it!</h2>
+        <p id="overlayText"></p>
+        <div class="overlay-actions">
+          <button id="shareBtn" type="button" hidden>Share Result</button>
+          <button id="overlayBtn">Next Puzzle</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="tutorialOverlay">
+      <div class="overlay-card tutorial-card">
+        <button id="tutorialSkip" type="button" class="skip-btn">Skip</button>
+        <h2 id="tutorialTitle">Welcome</h2>
+        <p id="tutorialBody"></p>
+        <div class="tutorial-demo" id="tutorialDemo"></div>
+        <div class="tutorial-dots" id="tutorialDots"></div>
+        <div class="overlay-actions">
+          <button id="tutorialBack" type="button">Back</button>
+          <button id="tutorialNext" type="button">Next</button>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <p>Every submitted word must be a real word that differs from your current word by exactly one letter.</p>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
