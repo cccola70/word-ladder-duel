@@ -78,6 +78,7 @@
         <button id="daily5Btn" class="daily-tier-btn" type="button" data-len="5">Daily (5)</button>
         <button id="daily6Btn" class="daily-tier-btn" type="button" data-len="6">Daily (6)</button>
         <button id="relaxedBtn" type="button">Relaxed Mode</button>
+        <button id="groupDuelBtn" type="button">Group Duel</button>
       </div>
     </div>
 
@@ -91,11 +92,73 @@
       </div>
     </div>
 
+    <div class="overlay" id="groupSetupOverlay">
+      <div class="overlay-card">
+        <h2>Group Duel</h2>
+        <p>Set up a puzzle 2–5 friends can all race against the same clock. Share the link — anyone who opens it before the start time waits in a synced lobby with you.</p>
+
+        <div class="setup-row">
+          <span class="setup-label">Word length</span>
+          <div class="setup-options" id="groupLenOptions">
+            <button type="button" class="setup-opt" data-len="4">4</button>
+            <button type="button" class="setup-opt active" data-len="5">5</button>
+            <button type="button" class="setup-opt" data-len="6">6</button>
+          </div>
+        </div>
+
+        <div class="setup-row">
+          <span class="setup-label">Mode</span>
+          <div class="setup-options" id="groupModeOptions">
+            <button type="button" class="setup-opt active" data-md="random">Timed</button>
+            <button type="button" class="setup-opt" data-md="relaxed">Relaxed</button>
+          </div>
+        </div>
+
+        <div class="setup-row">
+          <span class="setup-label">Starts in</span>
+          <div class="setup-options" id="groupLeadOptions">
+            <button type="button" class="setup-opt" data-lead="30">30s</button>
+            <button type="button" class="setup-opt active" data-lead="60">1 min</button>
+            <button type="button" class="setup-opt" data-lead="120">2 min</button>
+            <button type="button" class="setup-opt" data-lead="300">5 min</button>
+          </div>
+        </div>
+
+        <div class="overlay-actions">
+          <button id="groupCancelBtn" type="button">Cancel</button>
+          <button id="groupCreateBtn" type="button">Create Lobby Link</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="lobbyOverlay">
+      <div class="overlay-card">
+        <h2>Group Duel Lobby</h2>
+        <p id="lobbyInfo">4-letter · Timed</p>
+        <div class="lobby-countdown" id="lobbyCountdown">1:00</div>
+        <p class="lobby-hint" id="lobbyHint">Waiting for the start time — get everyone's link open before then.</p>
+        <ol class="group-leaderboard" id="lobbyLeaderboard" hidden></ol>
+        <div class="overlay-actions">
+          <button id="lobbyLeaveBtn" type="button">Leave Lobby</button>
+        </div>
+      </div>
+    </div>
+
     <div class="overlay" id="overlay">
       <div class="overlay-card">
         <h2 id="overlayTitle">You solved it!</h2>
         <p id="overlayText"></p>
         <p id="duelResult" class="duel-result" hidden></p>
+
+        <div id="groupResult" class="group-result" hidden>
+          <div class="group-name-row" id="groupNameRow">
+            <input type="text" id="groupNameInput" maxlength="16" placeholder="Your name for the leaderboard" />
+            <button id="groupSubmitBtn" type="button">Add Me</button>
+          </div>
+          <ol class="group-leaderboard" id="groupLeaderboard"></ol>
+          <button id="groupForwardBtn" type="button" hidden>Copy Link for Next Player</button>
+        </div>
+
         <div class="overlay-actions">
           <button id="shareBtn" type="button" hidden>Share Result</button>
           <button id="challengeBtn" type="button" hidden>Challenge a Friend</button>

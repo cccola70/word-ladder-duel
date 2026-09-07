@@ -546,14 +546,18 @@ const state = {
   dailyDate: null,
   dailyTier: null,
   duelOpponent: null,
+  groupPayload: null,
+  groupLobbyTimerId: null,
   muted: localStorage.getItem('wld_muted') === '1',
   paused: { manual: false, tutorial: false },
 };
 
 // True while the current round has no clock - either Relaxed Mode itself,
-// or a duel challenge whose sender played it relaxed too.
+// a duel challenge, or a group duel whose creator set it up relaxed too.
 function isUntimed() {
-  return state.mode === 'relaxed' || (state.mode === 'duel' && state.duelOpponent && state.duelOpponent.md === 'relaxed');
+  return state.mode === 'relaxed'
+    || (state.mode === 'duel' && state.duelOpponent && state.duelOpponent.md === 'relaxed')
+    || (state.mode === 'group' && state.groupPayload && state.groupPayload.md === 'relaxed');
 }
 
 // ---------- DOM ----------
@@ -578,6 +582,22 @@ const el = {
   daily5Btn: document.getElementById('daily5Btn'),
   daily6Btn: document.getElementById('daily6Btn'),
   relaxedBtn: document.getElementById('relaxedBtn'),
+  groupDuelBtn: document.getElementById('groupDuelBtn'),
+  groupSetupOverlay: document.getElementById('groupSetupOverlay'),
+  groupCancelBtn: document.getElementById('groupCancelBtn'),
+  groupCreateBtn: document.getElementById('groupCreateBtn'),
+  lobbyOverlay: document.getElementById('lobbyOverlay'),
+  lobbyInfo: document.getElementById('lobbyInfo'),
+  lobbyCountdown: document.getElementById('lobbyCountdown'),
+  lobbyHint: document.getElementById('lobbyHint'),
+  lobbyLeaderboard: document.getElementById('lobbyLeaderboard'),
+  lobbyLeaveBtn: document.getElementById('lobbyLeaveBtn'),
+  groupResult: document.getElementById('groupResult'),
+  groupNameRow: document.getElementById('groupNameRow'),
+  groupNameInput: document.getElementById('groupNameInput'),
+  groupSubmitBtn: document.getElementById('groupSubmitBtn'),
+  groupLeaderboard: document.getElementById('groupLeaderboard'),
+  groupForwardBtn: document.getElementById('groupForwardBtn'),
   pauseBtn: document.getElementById('pauseBtn'),
   pauseOverlay: document.getElementById('pauseOverlay'),
   resumeBtn: document.getElementById('resumeBtn'),
@@ -816,16 +836,185 @@ function hideChallengeButton() {
   el.challengeBtn.onclick = null;
 }
 
+// ---------- Group Duel (synced-start link, up to 5 players) ----------
+// Same "state lives entirely in the URL" trick as a 1:1 duel challenge,
+// scaled up: the payload also carries a shared start time (so everyone who
+// opens the link before then counts down to the same real-world instant)
+// and a running results list that gets forwarded from player to player.
+const GROUP_DUEL_MAX_PLAYERS = 5;
+
+function encodeGroupPayload(payload) {
+  return encodeURIComponent(btoa(JSON.stringify(payload)));
+}
+function decodeGroupPayload(str) {
+  try { return JSON.parse(atob(decodeURIComponent(str))); } catch (e) { return null; }
+}
+
+function buildGroupLink(payload) {
+  const url = new URL(location.href);
+  url.search = '';
+  url.searchParams.set('group', encodeGroupPayload(payload));
+  return url.toString();
+}
+
+function sortGroupResults(results) {
+  return results.slice().sort((a, b) => {
+    if (a.won !== b.won) return a.won ? -1 : 1;
+    if (!a.won) return 0;
+    if (a.mv !== b.mv) return a.mv - b.mv;
+    if (a.tl != null && b.tl != null) return b.tl - a.tl;
+    return 0;
+  });
+}
+
+function renderGroupLeaderboard(container, results) {
+  container.innerHTML = '';
+  if (results.length === 0) {
+    container.hidden = true;
+    return;
+  }
+  container.hidden = false;
+  sortGroupResults(results).forEach((r, i) => {
+    const li = document.createElement('li');
+    if (r.won && i === 0) li.classList.add('rank-1');
+    if (!r.won) li.classList.add('dnf');
+    const rank = document.createElement('span');
+    rank.className = 'rank';
+    rank.textContent = r.won ? `${i + 1}.` : '—';
+    const name = document.createElement('span');
+    name.className = 'g-name';
+    name.textContent = r.name;
+    const stats = document.createElement('span');
+    stats.className = 'g-stats';
+    stats.textContent = r.won
+      ? `${r.mv} moves${r.tl != null ? `, ${r.tl}s left` : ''}`
+      : "didn't finish";
+    li.append(rank, name, stats);
+    container.appendChild(li);
+  });
+}
+
+function showGroupResult(won) {
+  const payload = state.groupPayload;
+  el.groupResult.hidden = false;
+  renderGroupLeaderboard(el.groupLeaderboard, payload.results);
+
+  if (payload.results.length >= GROUP_DUEL_MAX_PLAYERS) {
+    el.groupNameRow.hidden = true;
+    el.groupForwardBtn.hidden = true;
+    return;
+  }
+
+  el.groupNameRow.hidden = false;
+  el.groupNameInput.value = '';
+  el.groupForwardBtn.hidden = true;
+
+  el.groupSubmitBtn.onclick = () => {
+    const name = el.groupNameInput.value.trim() || `Player ${payload.results.length + 1}`;
+    payload.results.push({
+      name,
+      mv: state.moves,
+      tl: isUntimed() ? null : state.timeLeft,
+      won,
+    });
+    renderGroupLeaderboard(el.groupLeaderboard, payload.results);
+    el.groupNameRow.hidden = true;
+    if (payload.results.length < GROUP_DUEL_MAX_PLAYERS) {
+      el.groupForwardBtn.hidden = false;
+      el.groupForwardBtn.onclick = () => copyGroupForwardLink(payload);
+    }
+  };
+}
+
+async function copyGroupForwardLink(payload) {
+  const copied = await copyTextToClipboard(buildGroupLink(payload));
+  const original = el.groupForwardBtn.textContent;
+  el.groupForwardBtn.textContent = copied ? 'Link copied!' : 'Copy failed';
+  setTimeout(() => { el.groupForwardBtn.textContent = original; }, 1500);
+}
+
+function formatLobbyCountdown(remainingMs) {
+  const totalSec = Math.max(0, Math.ceil(remainingMs / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  el.lobbyCountdown.textContent = `${m}:${String(s).padStart(2, '0')}`;
+  el.lobbyCountdown.classList.toggle('urgent', totalSec <= 3);
+}
+
+function leaveLobby() {
+  clearInterval(state.groupLobbyTimerId);
+  state.groupLobbyTimerId = null;
+  el.lobbyOverlay.classList.remove('visible');
+}
+
+// Opens a group duel link: plays immediately if the start time has already
+// passed (a late joiner), otherwise shows the synced waiting lobby and
+// starts the round the instant every open tab's clock reaches startAt.
+function openGroupLink(payload) {
+  // Whatever overlay was showing before (a win/lose screen, the setup form)
+  // shares the same stacking layer as the lobby and would otherwise paint
+  // on top of it, since it comes later in the document.
+  el.overlay.classList.remove('visible');
+  el.groupSetupOverlay.classList.remove('visible');
+  el.pauseOverlay.classList.remove('visible');
+
+  if (payload.results.length >= GROUP_DUEL_MAX_PLAYERS) {
+    el.lobbyInfo.textContent = `${payload.l}-Letter · ${payload.md === 'relaxed' ? 'Relaxed' : 'Timed'}`;
+    el.lobbyCountdown.hidden = true;
+    el.lobbyHint.textContent = `This duel already has its ${GROUP_DUEL_MAX_PLAYERS} players. Here's how they did:`;
+    renderGroupLeaderboard(el.lobbyLeaderboard, payload.results);
+    el.lobbyLeaveBtn.textContent = 'Start Your Own Puzzle';
+    el.lobbyOverlay.classList.add('visible');
+    return;
+  }
+
+  el.lobbyCountdown.hidden = false;
+  el.lobbyLeaderboard.hidden = true;
+  el.lobbyLeaveBtn.textContent = 'Leave Lobby';
+
+  if (Date.now() >= payload.startAt) {
+    newPuzzle('group', { groupPayload: payload });
+    return;
+  }
+
+  // Suspend whatever round was already in progress (if any) so its timer
+  // can't keep ticking - and potentially end the round - while hidden
+  // behind the lobby overlay during a long wait.
+  clearInterval(state.timerId);
+  state.timerId = null;
+  el.board.classList.add('board-hidden');
+
+  el.lobbyInfo.textContent = `${payload.l}-Letter · ${payload.md === 'relaxed' ? 'Relaxed' : 'Timed'}`;
+  el.lobbyHint.textContent = "Waiting for the start time — get everyone's link open before then.";
+  el.lobbyOverlay.classList.add('visible');
+  formatLobbyCountdown(payload.startAt - Date.now());
+
+  clearInterval(state.groupLobbyTimerId);
+  state.groupLobbyTimerId = setInterval(() => {
+    const remaining = payload.startAt - Date.now();
+    if (remaining <= 0) {
+      leaveLobby();
+      newPuzzle('group', { groupPayload: payload });
+      return;
+    }
+    formatLobbyCountdown(remaining);
+  }, 200);
+}
+
 // ---------- Puzzle lifecycle ----------
 function newPuzzle(mode, opts) {
   mode = mode || 'random';
   state.mode = mode;
   if (mode !== 'duel') state.duelOpponent = null;
   if (mode !== 'daily') state.dailyTier = null;
+  if (mode !== 'group') state.groupPayload = null;
+  leaveLobby();
+  el.board.classList.remove('board-hidden');
   hideShareButton();
   hideChallengeButton();
   el.duelResult.hidden = true;
   el.duelResult.className = 'duel-result';
+  el.groupResult.hidden = true;
   state.paused.manual = false;
   el.pauseOverlay.classList.remove('visible');
 
@@ -847,7 +1036,7 @@ function newPuzzle(mode, opts) {
     const rand = mulberry32(seedFromString(`word-ladder-${dateStr}-${tier}`));
     state.puzzle = pickPuzzle(rand, tier);
     el.modeBadge.textContent = `Daily Puzzle #${dayNumberFor(dateStr)} · ${tier}-Letter`;
-    el.modeBadge.classList.remove('relaxed', 'duel');
+    el.modeBadge.classList.remove('relaxed', 'duel', 'group');
     el.modeBadge.classList.add('daily');
 
     const existing = loadDailyRecord(dateStr, tier);
@@ -888,12 +1077,28 @@ function newPuzzle(mode, opts) {
     state.duelOpponent = payload;
     state.puzzle = { start: payload.s, target: payload.t, par, len: payload.l, graph };
     el.modeBadge.textContent = 'Duel Challenge';
-    el.modeBadge.classList.remove('daily', 'relaxed');
+    el.modeBadge.classList.remove('daily', 'relaxed', 'group');
     el.modeBadge.classList.add('duel');
+  } else if (mode === 'group') {
+    const payload = opts && opts.groupPayload;
+    const graph = payload && GRAPHS[payload.l];
+    const dist = graph && graph.has(payload.s) ? bfsDistances(graph, payload.s) : null;
+    const par = dist && dist.get(payload.t);
+    if (!payload || !graph || !graph.has(payload.s) || !graph.has(payload.t) || par === undefined) {
+      // Bad or stale link - fall back to a normal random puzzle instead of a dead page.
+      newPuzzle('random');
+      return;
+    }
+    state.dailyDate = null;
+    state.groupPayload = payload;
+    state.puzzle = { start: payload.s, target: payload.t, par, len: payload.l, graph };
+    el.modeBadge.textContent = `Group Duel · ${payload.l}-Letter · ${payload.md === 'relaxed' ? 'Relaxed' : 'Timed'}`;
+    el.modeBadge.classList.remove('daily', 'relaxed', 'duel');
+    el.modeBadge.classList.add('group');
   } else {
     state.dailyDate = null;
     state.puzzle = pickPuzzle();
-    el.modeBadge.classList.remove('daily', 'relaxed', 'duel');
+    el.modeBadge.classList.remove('daily', 'relaxed', 'duel', 'group');
     if (mode === 'relaxed') {
       el.modeBadge.textContent = 'Relaxed Mode';
       el.modeBadge.classList.add('relaxed');
@@ -977,6 +1182,10 @@ function endRound(won, reasonText) {
 
   if (state.mode === 'duel' && state.duelOpponent) {
     showDuelResult(won);
+  }
+
+  if (state.mode === 'group' && state.groupPayload) {
+    showGroupResult(won);
   }
 
   if (state.mode === 'daily') {
@@ -1206,6 +1415,59 @@ el.relaxedBtn.addEventListener('click', () => {
   newPuzzle('relaxed');
 });
 
+// ---------- Group Duel setup form ----------
+const groupSetup = { len: 5, md: 'random', lead: 60 };
+
+function wireSetupGroup(containerId, key, parse) {
+  const container = document.getElementById(containerId);
+  container.querySelectorAll('.setup-opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      container.querySelectorAll('.setup-opt').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      groupSetup[key] = parse(btn.dataset[key]);
+    });
+  });
+}
+wireSetupGroup('groupLenOptions', 'len', Number);
+wireSetupGroup('groupModeOptions', 'md', String);
+wireSetupGroup('groupLeadOptions', 'lead', Number);
+
+el.groupDuelBtn.addEventListener('click', () => {
+  // Pause whatever round is in progress while the setup form is open, so
+  // filling it out doesn't burn down that round's own clock in secret.
+  state.paused.manual = true;
+  applyPauseState();
+  el.groupSetupOverlay.classList.add('visible');
+});
+
+el.groupCancelBtn.addEventListener('click', () => {
+  el.groupSetupOverlay.classList.remove('visible');
+  state.paused.manual = false;
+  applyPauseState();
+});
+
+el.groupCreateBtn.addEventListener('click', () => {
+  el.groupSetupOverlay.classList.remove('visible');
+  state.paused.manual = false;
+  const puzzle = pickPuzzle(Math.random, groupSetup.len);
+  const payload = {
+    s: puzzle.start,
+    t: puzzle.target,
+    l: groupSetup.len,
+    md: groupSetup.md,
+    startAt: Date.now() + groupSetup.lead * 1000,
+    results: [],
+  };
+  copyTextToClipboard(buildGroupLink(payload));
+  setMessage('Lobby link copied! Send it to your friends, then wait for the countdown with them.', 'success');
+  openGroupLink(payload);
+});
+
+el.lobbyLeaveBtn.addEventListener('click', () => {
+  leaveLobby();
+  newPuzzle('random');
+});
+
 el.dailyStreakBadge.addEventListener('click', () => {
   newPuzzle('daily', { tier: nextUnplayedTier() });
 });
@@ -1327,14 +1589,21 @@ el.helpBtn.addEventListener('click', openTutorial);
 refreshDailyStreakBadge();
 refreshDailyTierButtons();
 
-const duelParam = new URLSearchParams(location.search).get('duel');
+const urlParams = new URLSearchParams(location.search);
+const duelParam = urlParams.get('duel');
+const groupParam = urlParams.get('group');
 const duelPayload = duelParam ? decodeDuelPayload(duelParam) : null;
-if (duelPayload) {
+const groupPayload = groupParam ? decodeGroupPayload(groupParam) : null;
+if (duelPayload || groupPayload) {
   // Strip the challenge out of the URL immediately so reloading (or the
   // player later sharing this same link onward) doesn't replay someone
   // else's stale challenge.
   history.replaceState(null, '', location.pathname);
+}
+if (duelPayload) {
   newPuzzle('duel', { duelPayload });
+} else if (groupPayload) {
+  openGroupLink(groupPayload);
 } else {
   newPuzzle('random');
 }

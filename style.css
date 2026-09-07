@@ -12,6 +12,7 @@
   --sky: #38bdf8;
   --tile-border: #2c3155;
   --fire: #fb923c;
+  --group: #f472b6;
 }
 
 :root[data-theme="light"] {
@@ -28,9 +29,16 @@
   --sky: #0284c7;
   --tile-border: #ddd8c8;
   --fire: #ea580c;
+  --group: #db2777;
 }
 
 * { box-sizing: border-box; }
+
+/* Safety net: several elements toggled via the `hidden` attribute also carry
+   an unconditional `display` rule of their own (e.g. flex containers), which
+   at equal specificity would otherwise beat the browser's default
+   [hidden] { display: none } - so make hidden always win outright. */
+[hidden] { display: none !important; }
 
 body {
   margin: 0;
@@ -102,6 +110,12 @@ header {
   color: var(--fire);
   background: rgba(251, 146, 60, 0.14);
   border-color: rgba(251, 146, 60, 0.45);
+}
+
+.mode-badge.group {
+  color: var(--group);
+  background: rgba(244, 114, 182, 0.14);
+  border-color: rgba(244, 114, 182, 0.45);
 }
 
 .daily-streak {
@@ -418,6 +432,11 @@ button:active {
   color: var(--sky);
 }
 
+#groupDuelBtn {
+  border-color: var(--group);
+  color: var(--group);
+}
+
 #resumeBtn {
   border-color: var(--accent);
   color: var(--accent);
@@ -491,6 +510,145 @@ button:active {
 .duel-result.win { border-color: var(--accent); color: var(--accent); }
 .duel-result.lose { border-color: var(--danger); color: var(--danger); }
 .duel-result.tie { border-color: var(--gold); color: var(--gold); }
+
+/* ---- Group Duel: setup form ---- */
+.setup-row {
+  text-align: left;
+  margin-bottom: 14px;
+}
+
+.setup-label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.setup-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.setup-opt {
+  padding: 8px 14px;
+  font-size: 0.85rem;
+}
+
+.setup-opt.active {
+  background: var(--group);
+  border-color: var(--group);
+  color: #fff;
+}
+
+#groupCreateBtn {
+  border-color: var(--group);
+  color: var(--group);
+}
+
+/* ---- Group Duel: lobby (waiting room) ---- */
+.lobby-countdown {
+  font-size: 3rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--group);
+  margin: 10px 0;
+}
+
+.lobby-countdown.urgent {
+  color: var(--danger);
+  animation: pulse 0.6s infinite;
+}
+
+.lobby-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+#lobbyLeaveBtn {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* ---- Group Duel: post-round leaderboard ---- */
+.group-result {
+  text-align: left;
+  margin-bottom: 16px;
+}
+
+.group-name-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+#groupNameInput {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 2px solid var(--tile-border);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+#groupSubmitBtn {
+  border-color: var(--group);
+  color: var(--group);
+  flex-shrink: 0;
+}
+
+.group-leaderboard {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.group-leaderboard li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--tile-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+}
+
+.group-leaderboard .rank {
+  font-weight: 700;
+  color: var(--muted);
+  width: 1.4em;
+  flex-shrink: 0;
+}
+
+.group-leaderboard li.rank-1 .rank { color: var(--gold); }
+.group-leaderboard .g-name {
+  flex: 1;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-leaderboard .g-stats {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.group-leaderboard li.dnf { opacity: 0.6; }
+
+#groupForwardBtn {
+  border-color: var(--group);
+  color: var(--group);
+}
 
 .tutorial-card {
   position: relative;
