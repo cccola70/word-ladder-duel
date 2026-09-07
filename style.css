@@ -71,6 +71,12 @@ header {
   border-color: rgba(251, 191, 36, 0.4);
 }
 
+.mode-badge.relaxed {
+  color: var(--muted);
+  background: rgba(138, 144, 179, 0.14);
+  border-color: rgba(138, 144, 179, 0.45);
+}
+
 h1 {
   margin: 0;
   font-size: 2rem;
@@ -129,6 +135,10 @@ h1 {
 
 #timer.paused::after {
   content: ' ⏸';
+}
+
+#timer.infinite {
+  color: var(--muted);
 }
 
 @keyframes pulse {
@@ -338,6 +348,11 @@ button:active {
 #pauseBtn {
   border-color: var(--muted);
   color: var(--muted);
+}
+
+#relaxedBtn {
+  border-color: var(--accent-2);
+  color: var(--accent-2);
 }
 
 #resumeBtn {

@@ -355,6 +355,7 @@ const el = {
   giveUpBtn: document.getElementById('giveUpBtn'),
   newBtn: document.getElementById('newBtn'),
   dailyBtn: document.getElementById('dailyBtn'),
+  relaxedBtn: document.getElementById('relaxedBtn'),
   pauseBtn: document.getElementById('pauseBtn'),
   pauseOverlay: document.getElementById('pauseOverlay'),
   resumeBtn: document.getElementById('resumeBtn'),
@@ -469,7 +470,7 @@ function applyPauseState() {
   } else {
     el.timer.classList.remove('paused');
     el.board.classList.remove('board-hidden');
-    if (!state.ended && !state.timerId) {
+    if (!state.ended && !state.timerId && state.mode !== 'relaxed') {
       startTimer();
     }
   }
@@ -484,7 +485,9 @@ function buildShareText(won) {
     : 'Word Ladder Duel 🪜');
   lines.push(`${start.toUpperCase()} -> ${target.toUpperCase()}`);
   lines.push(won
-    ? `Solved in ${state.moves}/${par} moves - ${state.timeLeft}s left`
+    ? (state.mode === 'relaxed'
+      ? `Solved in ${state.moves}/${par} moves`
+      : `Solved in ${state.moves}/${par} moves - ${state.timeLeft}s left`)
     : `Didn't finish (par ${par})`);
   for (let i = 1; i < state.path.length; i++) {
     const prev = state.path[i - 1], cur = state.path[i];
@@ -566,9 +569,14 @@ function newPuzzle(mode) {
     }
   } else {
     state.dailyDate = null;
-    el.modeBadge.textContent = 'Random Puzzle';
-    el.modeBadge.classList.remove('daily');
     state.puzzle = pickPuzzle();
+    el.modeBadge.classList.remove('daily', 'relaxed');
+    if (mode === 'relaxed') {
+      el.modeBadge.textContent = 'Relaxed Mode';
+      el.modeBadge.classList.add('relaxed');
+    } else {
+      el.modeBadge.textContent = 'Random Puzzle';
+    }
   }
 
   state.path = [state.puzzle.start];
@@ -576,18 +584,29 @@ function newPuzzle(mode) {
   state.timeLeft = 60;
   state.ended = false;
   state.targetDist = bfsDistances(state.puzzle.graph, state.puzzle.target);
-  el.timer.classList.remove('low');
-  el.timer.textContent = state.timeLeft;
+  clearInterval(state.timerId);
+  state.timerId = null;
+  el.timer.classList.remove('low', 'paused', 'infinite');
+  if (mode === 'relaxed') {
+    el.timer.textContent = '∞';
+    el.timer.classList.add('infinite');
+  } else {
+    el.timer.textContent = state.timeLeft;
+  }
   renderTiles(el.goalTiles, state.puzzle.target);
   renderLadder();
   renderInputTiles('', state.puzzle.len);
-  setMessage('Change one letter at a time to reach the goal word.');
+  setMessage(mode === 'relaxed'
+    ? 'No clock this round — change one letter at a time, whenever you like.'
+    : 'Change one letter at a time to reach the goal word.');
   el.wordInput.value = '';
   el.wordInput.maxLength = state.puzzle.len;
   el.wordInput.focus();
   updateStats();
   el.overlay.classList.remove('visible');
-  startTimer();
+  if (mode !== 'relaxed') {
+    startTimer();
+  }
 }
 
 function endRound(won, reasonText) {
@@ -598,7 +617,7 @@ function endRound(won, reasonText) {
   if (won) {
     const extra = state.moves - state.puzzle.par;
     const penalty = Math.max(0, extra) * 40;
-    const timeBonus = state.timeLeft * 2;
+    const timeBonus = state.mode === 'relaxed' ? 0 : state.timeLeft * 2;
     const roundScore = Math.max(60, 500 - penalty + timeBonus);
     finalScore = roundScore;
     state.score += roundScore;
@@ -608,7 +627,9 @@ function endRound(won, reasonText) {
       localStorage.setItem('wld_best', String(state.best));
     }
     el.overlayTitle.textContent = 'Solved!';
-    el.overlayText.textContent = `${state.puzzle.start.toUpperCase()} -> ${state.puzzle.target.toUpperCase()} in ${state.moves} moves (par ${state.puzzle.par}). +${roundScore} points, ${state.timeLeft}s left.`;
+    el.overlayText.textContent = state.mode === 'relaxed'
+      ? `${state.puzzle.start.toUpperCase()} -> ${state.puzzle.target.toUpperCase()} in ${state.moves} moves (par ${state.puzzle.par}). +${roundScore} points.`
+      : `${state.puzzle.start.toUpperCase()} -> ${state.puzzle.target.toUpperCase()} in ${state.moves} moves (par ${state.puzzle.par}). +${roundScore} points, ${state.timeLeft}s left.`;
     playSound('win');
   } else {
     state.streak = 0;
@@ -707,7 +728,9 @@ function submitGuess() {
   // valid move
   state.path.push(guess);
   state.moves += 1;
-  state.timeLeft = Math.min(90, state.timeLeft + 6);
+  if (state.mode !== 'relaxed') {
+    state.timeLeft = Math.min(90, state.timeLeft + 6);
+  }
   el.wordInput.value = '';
   renderInputTiles('', len);
   renderLadder();
@@ -767,6 +790,10 @@ el.dailyBtn.addEventListener('click', () => {
   newPuzzle('daily');
 });
 
+el.relaxedBtn.addEventListener('click', () => {
+  newPuzzle('relaxed');
+});
+
 el.pauseBtn.addEventListener('click', () => {
   if (state.ended) return;
   state.paused.manual = true;
@@ -781,7 +808,7 @@ el.resumeBtn.addEventListener('click', () => {
 });
 
 el.overlayBtn.addEventListener('click', () => {
-  newPuzzle('random');
+  newPuzzle(state.mode === 'relaxed' ? 'relaxed' : 'random');
 });
 
 el.muteBtn.addEventListener('click', () => {
@@ -803,8 +830,8 @@ const TUTORIAL_STEPS = [
     demo: ['cat', 'cot', 'dot', 'dog'],
   },
   {
-    title: 'Race the clock',
-    body: 'You start with 60 seconds. Every valid move adds +6s, so good play buys you more time. A wrong guess just shakes the box — no time lost.',
+    title: 'Race the clock (or don’t)',
+    body: 'You start with 60 seconds and every valid move adds +6s, so good play buys you more time. Prefer no pressure at all? Switch to Relaxed Mode for the same puzzles with no clock.',
   },
   {
     title: 'Hints & scoring',
