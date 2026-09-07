@@ -72,9 +72,9 @@ header {
 }
 
 .mode-badge.relaxed {
-  color: var(--muted);
-  background: rgba(138, 144, 179, 0.14);
-  border-color: rgba(138, 144, 179, 0.45);
+  color: var(--accent);
+  background: rgba(94, 234, 212, 0.14);
+  border-color: rgba(94, 234, 212, 0.45);
 }
 
 h1 {
