@@ -9,11 +9,13 @@
 <body>
   <div class="app">
     <header>
+      <button id="themeBtn" type="button" class="icon-btn" title="Toggle theme" aria-label="Toggle theme">🌙</button>
       <button id="helpBtn" type="button" class="icon-btn" title="How to play" aria-label="How to play">?</button>
       <button id="muteBtn" type="button" class="icon-btn" title="Toggle sound" aria-label="Toggle sound">🔊</button>
       <h1>Word Ladder Duel</h1>
       <p class="tagline">Change one letter at a time to climb from START to GOAL.</p>
       <p class="mode-badge" id="modeBadge">Random Puzzle</p>
+      <button class="daily-streak" id="dailyStreakBadge" type="button" title="Your Daily Puzzle streak">🔥 0-day streak</button>
     </header>
 
     <div class="stats-bar">
@@ -91,8 +93,10 @@
       <div class="overlay-card">
         <h2 id="overlayTitle">You solved it!</h2>
         <p id="overlayText"></p>
+        <p id="duelResult" class="duel-result" hidden></p>
         <div class="overlay-actions">
           <button id="shareBtn" type="button" hidden>Share Result</button>
+          <button id="challengeBtn" type="button" hidden>Challenge a Friend</button>
           <button id="overlayBtn">Next Puzzle</button>
         </div>
       </div>

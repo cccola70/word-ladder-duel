@@ -434,6 +434,26 @@ const SOUNDS = {
 };
 function playSound(name) { const fn = SOUNDS[name]; if (fn) fn(); }
 
+// ---------- Win celebration ----------
+const CONFETTI_COLORS = ['#5eead4', '#a78bfa', '#fbbf24', '#38bdf8', '#fb7185', '#fb923c'];
+function launchConfetti() {
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const container = document.createElement('div');
+  container.className = 'confetti-container';
+  for (let i = 0; i < 46; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.left = `${Math.random() * 100}vw`;
+    piece.style.background = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+    piece.style.setProperty('--drift', `${(Math.random() * 2 - 1) * 90}px`);
+    piece.style.animationDelay = `${Math.random() * 0.35}s`;
+    piece.style.animationDuration = `${1.8 + Math.random() * 1.4}s`;
+    container.appendChild(piece);
+  }
+  document.body.appendChild(container);
+  setTimeout(() => container.remove(), 3400);
+}
+
 // ---------- Daily puzzle helpers ----------
 function todayDateStr() {
   const d = new Date();
@@ -453,6 +473,38 @@ function saveDailyRecord(dateStr, record) {
   localStorage.setItem(dailyStorageKey(dateStr), JSON.stringify(record));
 }
 
+function shiftDateStr(dateStr, days) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
+
+// A day-over-day streak, distinct from the session "Streak" stat: it only
+// advances when the Daily Puzzle is actually solved, and survives reloads
+// and days away, breaking only when a day is missed or lost.
+function updateDailyStreak(dateStr, won) {
+  const lastDate = localStorage.getItem('wld_daily_streak_last_date');
+  let current = Number(localStorage.getItem('wld_daily_streak_current') || 0);
+  let best = Number(localStorage.getItem('wld_daily_streak_best') || 0);
+  if (!won) {
+    current = 0;
+  } else if (lastDate !== dateStr) {
+    current = lastDate === shiftDateStr(dateStr, -1) ? current + 1 : 1;
+    localStorage.setItem('wld_daily_streak_last_date', dateStr);
+  }
+  if (current > best) best = current;
+  localStorage.setItem('wld_daily_streak_current', String(current));
+  localStorage.setItem('wld_daily_streak_best', String(best));
+  refreshDailyStreakBadge();
+}
+
+function refreshDailyStreakBadge() {
+  const current = Number(localStorage.getItem('wld_daily_streak_current') || 0);
+  el.dailyStreakBadge.textContent = current > 0 ? `🔥 ${current}-day streak` : '🔥 Start a daily streak';
+  el.dailyStreakBadge.classList.toggle('active', current > 0);
+}
+
 // ---------- Game state ----------
 const state = {
   puzzle: null,
@@ -467,9 +519,16 @@ const state = {
   ended: false,
   mode: 'random',
   dailyDate: null,
+  duelOpponent: null,
   muted: localStorage.getItem('wld_muted') === '1',
   paused: { manual: false, tutorial: false },
 };
+
+// True while the current round has no clock - either Relaxed Mode itself,
+// or a duel challenge whose sender played it relaxed too.
+function isUntimed() {
+  return state.mode === 'relaxed' || (state.mode === 'duel' && state.duelOpponent && state.duelOpponent.md === 'relaxed');
+}
 
 // ---------- DOM ----------
 const el = {
@@ -501,7 +560,11 @@ const el = {
   overlayText: document.getElementById('overlayText'),
   overlayBtn: document.getElementById('overlayBtn'),
   shareBtn: document.getElementById('shareBtn'),
+  challengeBtn: document.getElementById('challengeBtn'),
+  duelResult: document.getElementById('duelResult'),
   helpBtn: document.getElementById('helpBtn'),
+  themeBtn: document.getElementById('themeBtn'),
+  dailyStreakBadge: document.getElementById('dailyStreakBadge'),
   tutorialOverlay: document.getElementById('tutorialOverlay'),
   tutorialTitle: document.getElementById('tutorialTitle'),
   tutorialBody: document.getElementById('tutorialBody'),
@@ -514,6 +577,17 @@ const el = {
 
 el.best.textContent = state.best;
 el.muteBtn.textContent = state.muted ? '🔇' : '🔊';
+
+// ---------- Theme ----------
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  el.themeBtn.textContent = theme === 'light' ? '🌙' : '☀️';
+  localStorage.setItem('wld_theme', theme);
+}
+applyTheme(localStorage.getItem('wld_theme') || 'dark');
+el.themeBtn.addEventListener('click', () => {
+  applyTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light');
+});
 
 // ---------- Rendering ----------
 function renderTiles(container, word, opts = {}) {
@@ -605,7 +679,7 @@ function applyPauseState() {
   } else {
     el.timer.classList.remove('paused');
     el.board.classList.remove('board-hidden');
-    if (!state.ended && !state.timerId && state.mode !== 'relaxed') {
+    if (!state.ended && !state.timerId && !isUntimed()) {
       startTimer();
     }
   }
@@ -620,7 +694,7 @@ function buildShareText(won) {
     : 'Word Ladder Duel 🪜');
   lines.push(`${start.toUpperCase()} -> ${target.toUpperCase()}`);
   lines.push(won
-    ? (state.mode === 'relaxed'
+    ? (isUntimed()
       ? `Solved in ${state.moves}/${par} moves`
       : `Solved in ${state.moves}/${par} moves - ${state.timeLeft}s left`)
     : `Didn't finish (par ${par})`);
@@ -631,6 +705,51 @@ function buildShareText(won) {
     lines.push(row);
   }
   return lines.join('\n');
+}
+
+// ---------- Duel challenges ----------
+// Encodes the just-finished puzzle + the sender's result into a URL so a
+// friend opening it plays the exact same start/target and sees how they
+// compared - no server needed, the whole challenge lives in the link.
+function encodeDuelPayload(payload) {
+  return encodeURIComponent(btoa(JSON.stringify(payload)));
+}
+function decodeDuelPayload(str) {
+  try { return JSON.parse(atob(decodeURIComponent(str))); } catch (e) { return null; }
+}
+
+function buildDuelLink() {
+  const payload = {
+    s: state.puzzle.start,
+    t: state.puzzle.target,
+    l: state.puzzle.len,
+    md: isUntimed() ? 'relaxed' : 'random',
+    mv: state.moves,
+    tl: isUntimed() ? null : state.timeLeft,
+    won: state.path[state.path.length - 1] === state.puzzle.target,
+  };
+  const url = new URL(location.href);
+  url.search = '';
+  url.searchParams.set('duel', encodeDuelPayload(payload));
+  return url.toString();
+}
+
+async function copyTextToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    let copied = false;
+    try { document.execCommand('copy'); copied = true; } catch (e2) { /* ignore */ }
+    document.body.removeChild(ta);
+    return copied;
+  }
 }
 
 function showShareButton(text) {
@@ -644,30 +763,38 @@ function hideShareButton() {
 }
 
 async function copyShareText(text) {
-  let copied = true;
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch (e) {
-    copied = false;
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.select();
-    try { document.execCommand('copy'); copied = true; } catch (e2) { /* ignore */ }
-    document.body.removeChild(ta);
-  }
+  const copied = await copyTextToClipboard(text);
   const original = el.shareBtn.textContent;
   el.shareBtn.textContent = copied ? 'Copied!' : 'Copy failed';
   setTimeout(() => { el.shareBtn.textContent = original; }, 1500);
 }
 
+async function copyChallengeLink() {
+  const copied = await copyTextToClipboard(buildDuelLink());
+  const original = el.challengeBtn.textContent;
+  el.challengeBtn.textContent = copied ? 'Link copied!' : 'Copy failed';
+  setTimeout(() => { el.challengeBtn.textContent = original; }, 1500);
+}
+
+function showChallengeButton() {
+  el.challengeBtn.hidden = false;
+  el.challengeBtn.onclick = copyChallengeLink;
+}
+
+function hideChallengeButton() {
+  el.challengeBtn.hidden = true;
+  el.challengeBtn.onclick = null;
+}
+
 // ---------- Puzzle lifecycle ----------
-function newPuzzle(mode) {
+function newPuzzle(mode, opts) {
   mode = mode || 'random';
   state.mode = mode;
+  if (mode !== 'duel') state.duelOpponent = null;
   hideShareButton();
+  hideChallengeButton();
+  el.duelResult.hidden = true;
+  el.duelResult.className = 'duel-result';
   state.paused.manual = false;
   el.pauseOverlay.classList.remove('visible');
 
@@ -684,6 +811,7 @@ function newPuzzle(mode) {
     const rand = mulberry32(seedFromString('word-ladder-' + dateStr));
     state.puzzle = pickPuzzle(rand);
     el.modeBadge.textContent = `Daily Puzzle #${dayNumberFor(dateStr)}`;
+    el.modeBadge.classList.remove('relaxed', 'duel');
     el.modeBadge.classList.add('daily');
 
     const existing = loadDailyRecord(dateStr);
@@ -709,10 +837,26 @@ function newPuzzle(mode) {
       el.overlay.classList.add('visible');
       return;
     }
+  } else if (mode === 'duel') {
+    const payload = opts && opts.duelPayload;
+    const graph = payload && GRAPHS[payload.l];
+    const dist = graph && graph.has(payload.s) ? bfsDistances(graph, payload.s) : null;
+    const par = dist && dist.get(payload.t);
+    if (!payload || !graph || !graph.has(payload.s) || !graph.has(payload.t) || par === undefined) {
+      // Bad or stale link - fall back to a normal random puzzle instead of a dead page.
+      newPuzzle('random');
+      return;
+    }
+    state.dailyDate = null;
+    state.duelOpponent = payload;
+    state.puzzle = { start: payload.s, target: payload.t, par, len: payload.l, graph };
+    el.modeBadge.textContent = 'Duel Challenge';
+    el.modeBadge.classList.remove('daily', 'relaxed');
+    el.modeBadge.classList.add('duel');
   } else {
     state.dailyDate = null;
     state.puzzle = pickPuzzle();
-    el.modeBadge.classList.remove('daily', 'relaxed');
+    el.modeBadge.classList.remove('daily', 'relaxed', 'duel');
     if (mode === 'relaxed') {
       el.modeBadge.textContent = 'Relaxed Mode';
       el.modeBadge.classList.add('relaxed');
@@ -729,7 +873,8 @@ function newPuzzle(mode) {
   clearInterval(state.timerId);
   state.timerId = null;
   el.timer.classList.remove('low', 'paused', 'infinite');
-  if (mode === 'relaxed') {
+  const untimed = isUntimed();
+  if (untimed) {
     el.timer.textContent = '∞';
     el.timer.classList.add('infinite');
   } else {
@@ -738,7 +883,7 @@ function newPuzzle(mode) {
   renderTiles(el.goalTiles, state.puzzle.target);
   renderLadder();
   renderInputTiles('', state.puzzle.len);
-  setMessage(mode === 'relaxed'
+  setMessage(untimed
     ? 'No clock this round — change one letter at a time, whenever you like.'
     : 'Change one letter at a time to reach the goal word.');
   el.wordInput.value = '';
@@ -746,7 +891,7 @@ function newPuzzle(mode) {
   el.wordInput.focus();
   updateStats();
   el.overlay.classList.remove('visible');
-  if (mode !== 'relaxed') {
+  if (!untimed) {
     startTimer();
   }
 }
@@ -755,11 +900,12 @@ function endRound(won, reasonText) {
   if (state.ended) return;
   state.ended = true;
   clearInterval(state.timerId);
+  const untimed = isUntimed();
   let finalScore = 0;
   if (won) {
     const extra = state.moves - state.puzzle.par;
     const penalty = Math.max(0, extra) * 40;
-    const timeBonus = state.mode === 'relaxed' ? 0 : state.timeLeft * 2;
+    const timeBonus = untimed ? 0 : state.timeLeft * 2;
     const roundScore = Math.max(60, 500 - penalty + timeBonus);
     finalScore = roundScore;
     state.score += roundScore;
@@ -769,10 +915,11 @@ function endRound(won, reasonText) {
       localStorage.setItem('wld_best', String(state.best));
     }
     el.overlayTitle.textContent = 'Solved!';
-    el.overlayText.textContent = state.mode === 'relaxed'
+    el.overlayText.textContent = untimed
       ? `${state.puzzle.start.toUpperCase()} -> ${state.puzzle.target.toUpperCase()} in ${state.moves} moves (par ${state.puzzle.par}). +${roundScore} points.`
       : `${state.puzzle.start.toUpperCase()} -> ${state.puzzle.target.toUpperCase()} in ${state.moves} moves (par ${state.puzzle.par}). +${roundScore} points, ${state.timeLeft}s left.`;
     playSound('win');
+    launchConfetti();
   } else {
     state.streak = 0;
     const path = reconstructPath(currentWord());
@@ -787,7 +934,16 @@ function endRound(won, reasonText) {
 
   const shareText = buildShareText(won);
   showShareButton(shareText);
+  if (state.mode !== 'daily') {
+    showChallengeButton();
+  }
+
+  if (state.mode === 'duel' && state.duelOpponent) {
+    showDuelResult(won);
+  }
+
   if (state.mode === 'daily') {
+    updateDailyStreak(state.dailyDate, won);
     saveDailyRecord(state.dailyDate, {
       won,
       moves: state.moves,
@@ -799,6 +955,46 @@ function endRound(won, reasonText) {
       shareText,
     });
   }
+}
+
+// Compares this attempt against the opponent's result baked into the duel
+// link, and shows a verdict: fewer moves wins; a moves tie is broken by
+// time left (when the round was timed); otherwise it's a tie.
+function showDuelResult(won) {
+  const opp = state.duelOpponent;
+  const oppTimed = opp.md !== 'relaxed';
+  const oppSummary = !won
+    ? (opp.won ? `Your friend solved it in ${opp.mv} moves${oppTimed ? `, ${opp.tl}s left` : ''}.` : "Your friend didn't finish it either.")
+    : null;
+
+  let verdict, cls;
+  if (!won) {
+    verdict = opp.won ? 'Your friend won this round.' : "It's a tie — neither of you finished.";
+    cls = opp.won ? 'lose' : 'tie';
+  } else if (!opp.won) {
+    verdict = 'You beat your friend! 🏆';
+    cls = 'win';
+  } else if (state.moves < opp.mv) {
+    verdict = 'You beat your friend! 🏆';
+    cls = 'win';
+  } else if (state.moves > opp.mv) {
+    verdict = 'Your friend won this round.';
+    cls = 'lose';
+  } else if (!isUntimed() && oppTimed && state.timeLeft !== opp.tl) {
+    verdict = state.timeLeft > opp.tl ? 'You beat your friend! 🏆' : 'Your friend won this round.';
+    cls = state.timeLeft > opp.tl ? 'win' : 'lose';
+  } else {
+    verdict = "It's a tie!";
+    cls = 'tie';
+  }
+
+  const friendLine = won
+    ? `Friend: ${opp.mv} moves${oppTimed && opp.won ? `, ${opp.tl}s left` : ''}${!opp.won ? " (didn't finish)" : ''}`
+    : oppSummary;
+
+  el.duelResult.textContent = `${friendLine}\n${verdict}`;
+  el.duelResult.className = `duel-result ${cls}`;
+  el.duelResult.hidden = false;
 }
 
 function reconstructPath(fromWord, avoidUsed = true) {
@@ -875,7 +1071,7 @@ function submitGuess() {
   // valid move
   state.path.push(guess);
   state.moves += 1;
-  if (state.mode !== 'relaxed') {
+  if (!isUntimed()) {
     state.timeLeft = Math.min(90, state.timeLeft + 6);
   }
   el.wordInput.value = '';
@@ -970,6 +1166,10 @@ el.relaxedBtn.addEventListener('click', () => {
   newPuzzle('relaxed');
 });
 
+el.dailyStreakBadge.addEventListener('click', () => {
+  newPuzzle('daily');
+});
+
 el.pauseBtn.addEventListener('click', () => {
   if (state.ended) return;
   state.paused.manual = true;
@@ -984,7 +1184,7 @@ el.resumeBtn.addEventListener('click', () => {
 });
 
 el.overlayBtn.addEventListener('click', () => {
-  newPuzzle(state.mode === 'relaxed' ? 'relaxed' : 'random');
+  newPuzzle(isUntimed() ? 'relaxed' : 'random');
 });
 
 el.muteBtn.addEventListener('click', () => {
@@ -1014,8 +1214,12 @@ const TUTORIAL_STEPS = [
     body: 'Stuck? Hint (−75 pts) reveals a valid next word, and Give Up reveals a full solution. Your score rewards fewer moves and more time left on the clock.',
   },
   {
-    title: 'Daily Puzzle & sharing',
-    body: 'Daily Puzzle gives everyone the same challenge each day — solve it once, then come back tomorrow for a new one. Share Result copies an emoji grid of your ladder to paste anywhere.',
+    title: 'Daily Puzzle & streaks',
+    body: 'Daily Puzzle gives everyone the same challenge each day — solve it once, then come back tomorrow for a new one. Solve it days in a row to build the 🔥 streak shown up top; missing a day resets it.',
+  },
+  {
+    title: 'Challenge a friend',
+    body: 'After any round, Challenge a Friend copies a link with that exact puzzle and your result baked in. Whoever opens it plays the same start and goal, and finds out who won.',
   },
 ];
 
@@ -1080,7 +1284,20 @@ el.tutorialSkip.addEventListener('click', closeTutorial);
 el.helpBtn.addEventListener('click', openTutorial);
 
 // ---------- Init ----------
-newPuzzle('random');
+refreshDailyStreakBadge();
+
+const duelParam = new URLSearchParams(location.search).get('duel');
+const duelPayload = duelParam ? decodeDuelPayload(duelParam) : null;
+if (duelPayload) {
+  // Strip the challenge out of the URL immediately so reloading (or the
+  // player later sharing this same link onward) doesn't replay someone
+  // else's stale challenge.
+  history.replaceState(null, '', location.pathname);
+  newPuzzle('duel', { duelPayload });
+} else {
+  newPuzzle('random');
+}
+
 if (!localStorage.getItem('wld_tutorial_seen')) {
   openTutorial();
 }
