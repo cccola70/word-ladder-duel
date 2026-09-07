@@ -794,8 +794,12 @@ function endRound(won, reasonText) {
   }
 }
 
-function reconstructPath(fromWord) {
+function reconstructPath(fromWord, avoidUsed = true) {
   // BFS from fromWord to target using the puzzle graph, return word sequence.
+  // By default avoids routing back through words already used earlier in
+  // this attempt, so the shown solution doesn't double back on the
+  // player's own history; falls back to an unrestricted search if no such
+  // route exists, so a solution is still shown whenever one is possible.
   const { graph, target } = state.puzzle;
   if (!graph.has(fromWord)) return null;
   const prev = new Map([[fromWord, null]]);
@@ -805,13 +809,14 @@ function reconstructPath(fromWord) {
     const cur = queue[head++];
     if (cur === target) break;
     for (const nb of graph.get(cur)) {
-      if (!prev.has(nb)) {
-        prev.set(nb, cur);
-        queue.push(nb);
-      }
+      if (prev.has(nb) || (avoidUsed && state.path.includes(nb) && nb !== fromWord)) continue;
+      prev.set(nb, cur);
+      queue.push(nb);
     }
   }
-  if (!prev.has(target)) return null;
+  if (!prev.has(target)) {
+    return avoidUsed ? reconstructPath(fromWord, false) : null;
+  }
   const seq = [];
   let node = target;
   while (node !== null) {
@@ -889,19 +894,48 @@ function fail(msg) {
 }
 
 // ---------- Buttons ----------
+// Finds a good next word from the current position, without ever suggesting
+// a word already used earlier in this attempt (which the game would then
+// reject as "already used" - a dead-end hint).
+function computeHint() {
+  const cur = currentWord();
+  const { graph, target } = state.puzzle;
+  if (!graph.has(cur)) return null;
+
+  // Preferred: a neighbor strictly closer to the goal that's still unused.
+  const curDist = state.targetDist.get(cur);
+  if (curDist !== undefined) {
+    for (const nb of graph.get(cur)) {
+      if (state.targetDist.get(nb) === curDist - 1 && !state.path.includes(nb)) {
+        return nb;
+      }
+    }
+  }
+
+  // Fallback: re-route from here to the goal, refusing to step through any
+  // word already used (covers detours where the direct shortest-path
+  // neighbor turned out to be somewhere the player already visited).
+  const prev = new Map([[cur, null]]);
+  const queue = [cur];
+  let head = 0;
+  while (head < queue.length) {
+    const word = queue[head++];
+    if (word === target) break;
+    for (const nb of graph.get(word)) {
+      if (prev.has(nb) || state.path.includes(nb)) continue;
+      prev.set(nb, word);
+      queue.push(nb);
+    }
+  }
+  if (!prev.has(target)) return null;
+  let node = target;
+  while (prev.get(node) !== cur) node = prev.get(node);
+  return node;
+}
+
 el.hintBtn.addEventListener('click', () => {
   if (state.ended) return;
-  const cur = currentWord();
-  const curDist = state.targetDist.get(cur);
-  if (curDist === undefined) {
-    setMessage('No hint available from here.', 'error');
-    return;
-  }
-  const { graph, target } = state.puzzle;
-  let hintWord = null;
-  for (const nb of graph.get(cur)) {
-    if (state.targetDist.get(nb) === curDist - 1) { hintWord = nb; break; }
-  }
+  const hintWord = computeHint();
   if (!hintWord) {
     setMessage('No hint available from here.', 'error');
     return;
