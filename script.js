@@ -1182,9 +1182,12 @@ const el = {
   hintBtn: document.getElementById('hintBtn'),
   giveUpBtn: document.getElementById('giveUpBtn'),
   newBtn: document.getElementById('newBtn'),
-  daily4Btn: document.getElementById('daily4Btn'),
-  daily5Btn: document.getElementById('daily5Btn'),
-  daily6Btn: document.getElementById('daily6Btn'),
+  dailyBtn: document.getElementById('dailyBtn'),
+  dailySetupOverlay: document.getElementById('dailySetupOverlay'),
+  dailySetupCancelBtn: document.getElementById('dailySetupCancelBtn'),
+  dailyOpt4: document.getElementById('dailyOpt4'),
+  dailyOpt5: document.getElementById('dailyOpt5'),
+  dailyOpt6: document.getElementById('dailyOpt6'),
   relaxedBtn: document.getElementById('relaxedBtn'),
   groupDuelBtn: document.getElementById('groupDuelBtn'),
   groupSetupOverlay: document.getElementById('groupSetupOverlay'),
@@ -1227,7 +1230,7 @@ const el = {
   tutorialSkip: document.getElementById('tutorialSkip'),
 };
 
-el.dailyTierBtns = { 4: el.daily4Btn, 5: el.daily5Btn, 6: el.daily6Btn };
+el.dailyTierBtns = { 4: el.dailyOpt4, 5: el.dailyOpt5, 6: el.dailyOpt6 };
 
 el.best.textContent = state.best;
 el.muteBtn.textContent = state.muted ? '🔇' : '🔊';
@@ -1621,19 +1624,16 @@ function newPuzzle(mode, opts) {
   el.groupResult.hidden = true;
   state.paused.manual = false;
   el.pauseOverlay.classList.remove('visible');
+  el.dailySetupOverlay.classList.remove('visible');
 
   // Hide whichever mode button matches the mode already in play - picking
   // it again would just be confusing - while leaving the other switches
   // visible so there's always a way to change mode.
   el.newBtn.hidden = mode === 'random';
   el.relaxedBtn.hidden = mode === 'relaxed';
-  for (const len of DAILY_TIERS) {
-    el.dailyTierBtns[len].hidden = false;
-  }
 
   if (mode === 'daily') {
     const tier = (opts && opts.tier) || state.dailyTier || 5;
-    el.dailyTierBtns[tier].hidden = true;
     const dateStr = todayDateStr();
     state.dailyDate = dateStr;
     state.dailyTier = tier;
@@ -2007,6 +2007,21 @@ el.giveUpBtn.addEventListener('click', () => {
 
 el.newBtn.addEventListener('click', () => {
   newPuzzle('random');
+});
+
+el.dailyBtn.addEventListener('click', () => {
+  // Pause whatever round is in progress while the setup popup is open, so
+  // picking a length doesn't burn down that round's own clock in secret.
+  state.paused.manual = true;
+  applyPauseState();
+  refreshDailyTierButtons();
+  el.dailySetupOverlay.classList.add('visible');
+});
+
+el.dailySetupCancelBtn.addEventListener('click', () => {
+  el.dailySetupOverlay.classList.remove('visible');
+  state.paused.manual = false;
+  applyPauseState();
 });
 
 for (const len of DAILY_TIERS) {

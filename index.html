@@ -74,9 +74,7 @@
         <button id="hintBtn" type="button">Hint (-75 pts)</button>
         <button id="giveUpBtn" type="button">Give Up</button>
         <button id="newBtn" type="button">New Puzzle</button>
-        <button id="daily4Btn" class="daily-tier-btn" type="button" data-len="4">Daily (4)</button>
-        <button id="daily5Btn" class="daily-tier-btn" type="button" data-len="5">Daily (5)</button>
-        <button id="daily6Btn" class="daily-tier-btn" type="button" data-len="6">Daily (6)</button>
+        <button id="dailyBtn" type="button">Daily Puzzle</button>
         <button id="relaxedBtn" type="button">Relaxed Mode</button>
         <button id="groupDuelBtn" type="button">Group Duel</button>
       </div>
@@ -88,6 +86,23 @@
         <p>Your progress and timer are on hold. The puzzle is hidden so you can't stall for time.</p>
         <div class="overlay-actions">
           <button id="resumeBtn" type="button">Resume</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="dailySetupOverlay">
+      <div class="overlay-card">
+        <h2>Daily Puzzle</h2>
+        <p>Everyone gets the same puzzle at each length today. Solve any one to keep your streak alive.</p>
+
+        <div class="setup-options" id="dailyLenOptions">
+          <button type="button" class="daily-tier-btn" id="dailyOpt4" data-len="4">4 Letters</button>
+          <button type="button" class="daily-tier-btn" id="dailyOpt5" data-len="5">5 Letters</button>
+          <button type="button" class="daily-tier-btn" id="dailyOpt6" data-len="6">6 Letters</button>
+        </div>
+
+        <div class="overlay-actions">
+          <button id="dailySetupCancelBtn" type="button">Cancel</button>
         </div>
       </div>
     </div>

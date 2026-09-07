@@ -409,6 +409,11 @@ button:active {
   color: var(--danger);
 }
 
+#dailyBtn {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
 .daily-tier-btn {
   border-color: var(--gold);
   color: var(--gold);
@@ -531,6 +536,11 @@ button:active {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+#dailyLenOptions {
+  justify-content: center;
+  margin-bottom: 4px;
 }
 
 .setup-opt {
