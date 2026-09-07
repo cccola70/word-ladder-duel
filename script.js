@@ -671,6 +671,13 @@ function newPuzzle(mode) {
   state.paused.manual = false;
   el.pauseOverlay.classList.remove('visible');
 
+  // Hide whichever mode button matches the mode already in play - picking
+  // it again would just be confusing - while leaving the other two mode
+  // switches visible so there's always a way to change mode.
+  el.newBtn.hidden = mode === 'random';
+  el.dailyBtn.hidden = mode === 'daily';
+  el.relaxedBtn.hidden = mode === 'relaxed';
+
   if (mode === 'daily') {
     const dateStr = todayDateStr();
     state.dailyDate = dateStr;
