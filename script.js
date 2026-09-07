@@ -381,9 +381,9 @@ function seedFromString(str) {
 }
 
 // ---------- Puzzle generation ----------
-function pickPuzzle(rand) {
+function pickPuzzle(rand, forcedLen) {
   rand = rand || Math.random;
-  const lengths = [4, 5, 6];
+  const lengths = forcedLen ? [forcedLen] : [4, 5, 6];
   for (let attempt = 0; attempt < 600; attempt++) {
     const len = lengths[Math.floor(rand() * lengths.length)];
     const graph = GRAPHS[len];
@@ -465,12 +465,15 @@ function dayNumberFor(dateStr) {
   const epoch = new Date(2026, 0, 1);
   return Math.round((cur - epoch) / 86400000) + 1;
 }
-function dailyStorageKey(dateStr) { return `wld_daily_${dateStr}`; }
-function loadDailyRecord(dateStr) {
-  try { return JSON.parse(localStorage.getItem(dailyStorageKey(dateStr))); } catch (e) { return null; }
+const DAILY_TIERS = [4, 5, 6];
+
+// Each length has its own daily puzzle, so each gets its own storage key.
+function dailyStorageKey(dateStr, len) { return `wld_daily_${dateStr}_${len}`; }
+function loadDailyRecord(dateStr, len) {
+  try { return JSON.parse(localStorage.getItem(dailyStorageKey(dateStr, len))); } catch (e) { return null; }
 }
-function saveDailyRecord(dateStr, record) {
-  localStorage.setItem(dailyStorageKey(dateStr), JSON.stringify(record));
+function saveDailyRecord(dateStr, len, record) {
+  localStorage.setItem(dailyStorageKey(dateStr, len), JSON.stringify(record));
 }
 
 function shiftDateStr(dateStr, days) {
@@ -481,15 +484,18 @@ function shiftDateStr(dateStr, days) {
 }
 
 // A day-over-day streak, distinct from the session "Streak" stat: it only
-// advances when the Daily Puzzle is actually solved, and survives reloads
-// and days away, breaking only when a day is missed or lost.
+// advances when a Daily Puzzle is actually solved, and survives reloads and
+// days away, breaking only when a whole day passes with no tier solved.
+// With three tiers a day, winning any ONE of them secures the day, so a
+// loss is a pure no-op here rather than zeroing the streak outright -
+// otherwise failing your first attempt would erase a streak that a later
+// win the same day could still have saved.
 function updateDailyStreak(dateStr, won) {
+  if (!won) return;
   const lastDate = localStorage.getItem('wld_daily_streak_last_date');
   let current = Number(localStorage.getItem('wld_daily_streak_current') || 0);
   let best = Number(localStorage.getItem('wld_daily_streak_best') || 0);
-  if (!won) {
-    current = 0;
-  } else if (lastDate !== dateStr) {
+  if (lastDate !== dateStr) {
     current = lastDate === shiftDateStr(dateStr, -1) ? current + 1 : 1;
     localStorage.setItem('wld_daily_streak_last_date', dateStr);
   }
@@ -503,6 +509,25 @@ function refreshDailyStreakBadge() {
   const current = Number(localStorage.getItem('wld_daily_streak_current') || 0);
   el.dailyStreakBadge.textContent = current > 0 ? `🔥 ${current}-day streak` : '🔥 Start a daily streak';
   el.dailyStreakBadge.classList.toggle('active', current > 0);
+}
+
+function refreshDailyTierButtons() {
+  const dateStr = todayDateStr();
+  for (const len of DAILY_TIERS) {
+    const btn = el.dailyTierBtns[len];
+    const done = !!loadDailyRecord(dateStr, len);
+    btn.classList.toggle('completed', done);
+  }
+}
+
+// The tier the streak badge jumps to: the first not yet played today, or
+// tier 5 (the middle ground) once all three are already done.
+function nextUnplayedTier() {
+  const dateStr = todayDateStr();
+  for (const len of DAILY_TIERS) {
+    if (!loadDailyRecord(dateStr, len)) return len;
+  }
+  return 5;
 }
 
 // ---------- Game state ----------
@@ -519,6 +544,7 @@ const state = {
   ended: false,
   mode: 'random',
   dailyDate: null,
+  dailyTier: null,
   duelOpponent: null,
   muted: localStorage.getItem('wld_muted') === '1',
   paused: { manual: false, tutorial: false },
@@ -548,7 +574,9 @@ const el = {
   hintBtn: document.getElementById('hintBtn'),
   giveUpBtn: document.getElementById('giveUpBtn'),
   newBtn: document.getElementById('newBtn'),
-  dailyBtn: document.getElementById('dailyBtn'),
+  daily4Btn: document.getElementById('daily4Btn'),
+  daily5Btn: document.getElementById('daily5Btn'),
+  daily6Btn: document.getElementById('daily6Btn'),
   relaxedBtn: document.getElementById('relaxedBtn'),
   pauseBtn: document.getElementById('pauseBtn'),
   pauseOverlay: document.getElementById('pauseOverlay'),
@@ -574,6 +602,8 @@ const el = {
   tutorialNext: document.getElementById('tutorialNext'),
   tutorialSkip: document.getElementById('tutorialSkip'),
 };
+
+el.dailyTierBtns = { 4: el.daily4Btn, 5: el.daily5Btn, 6: el.daily6Btn };
 
 el.best.textContent = state.best;
 el.muteBtn.textContent = state.muted ? '🔇' : '🔊';
@@ -690,7 +720,7 @@ function buildShareText(won) {
   const { start, target, par } = state.puzzle;
   const lines = [];
   lines.push(state.mode === 'daily'
-    ? `Word Ladder Duel #${dayNumberFor(state.dailyDate)} 🪜`
+    ? `Word Ladder Duel #${dayNumberFor(state.dailyDate)} (${state.dailyTier}-letter) 🪜`
     : 'Word Ladder Duel 🪜');
   lines.push(`${start.toUpperCase()} -> ${target.toUpperCase()}`);
   lines.push(won
@@ -791,6 +821,7 @@ function newPuzzle(mode, opts) {
   mode = mode || 'random';
   state.mode = mode;
   if (mode !== 'duel') state.duelOpponent = null;
+  if (mode !== 'daily') state.dailyTier = null;
   hideShareButton();
   hideChallengeButton();
   el.duelResult.hidden = true;
@@ -799,22 +830,27 @@ function newPuzzle(mode, opts) {
   el.pauseOverlay.classList.remove('visible');
 
   // Hide whichever mode button matches the mode already in play - picking
-  // it again would just be confusing - while leaving the other two mode
-  // switches visible so there's always a way to change mode.
+  // it again would just be confusing - while leaving the other switches
+  // visible so there's always a way to change mode.
   el.newBtn.hidden = mode === 'random';
-  el.dailyBtn.hidden = mode === 'daily';
   el.relaxedBtn.hidden = mode === 'relaxed';
+  for (const len of DAILY_TIERS) {
+    el.dailyTierBtns[len].hidden = false;
+  }
 
   if (mode === 'daily') {
+    const tier = (opts && opts.tier) || state.dailyTier || 5;
+    el.dailyTierBtns[tier].hidden = true;
     const dateStr = todayDateStr();
     state.dailyDate = dateStr;
-    const rand = mulberry32(seedFromString('word-ladder-' + dateStr));
-    state.puzzle = pickPuzzle(rand);
-    el.modeBadge.textContent = `Daily Puzzle #${dayNumberFor(dateStr)}`;
+    state.dailyTier = tier;
+    const rand = mulberry32(seedFromString(`word-ladder-${dateStr}-${tier}`));
+    state.puzzle = pickPuzzle(rand, tier);
+    el.modeBadge.textContent = `Daily Puzzle #${dayNumberFor(dateStr)} · ${tier}-Letter`;
     el.modeBadge.classList.remove('relaxed', 'duel');
     el.modeBadge.classList.add('daily');
 
-    const existing = loadDailyRecord(dateStr);
+    const existing = loadDailyRecord(dateStr, tier);
     if (existing) {
       state.path = existing.path || [state.puzzle.start];
       state.moves = existing.moves || 0;
@@ -829,12 +865,13 @@ function newPuzzle(mode, opts) {
       renderInputTiles('', state.puzzle.len);
       el.wordInput.value = '';
       el.wordInput.maxLength = state.puzzle.len;
-      setMessage("You already played today's puzzle. Come back tomorrow for a new one!");
+      setMessage("You already played today's puzzle at this length. Come back tomorrow for a new one!");
       updateStats();
       el.overlayTitle.textContent = existing.overlayTitle;
       el.overlayText.textContent = existing.overlayText;
       showShareButton(existing.shareText);
       el.overlay.classList.add('visible');
+      refreshDailyTierButtons();
       return;
     }
   } else if (mode === 'duel') {
@@ -944,7 +981,7 @@ function endRound(won, reasonText) {
 
   if (state.mode === 'daily') {
     updateDailyStreak(state.dailyDate, won);
-    saveDailyRecord(state.dailyDate, {
+    saveDailyRecord(state.dailyDate, state.dailyTier, {
       won,
       moves: state.moves,
       timeLeft: state.timeLeft,
@@ -954,6 +991,7 @@ function endRound(won, reasonText) {
       overlayText: el.overlayText.textContent,
       shareText,
     });
+    refreshDailyTierButtons();
   }
 }
 
@@ -1158,16 +1196,18 @@ el.newBtn.addEventListener('click', () => {
   newPuzzle('random');
 });
 
-el.dailyBtn.addEventListener('click', () => {
-  newPuzzle('daily');
-});
+for (const len of DAILY_TIERS) {
+  el.dailyTierBtns[len].addEventListener('click', () => {
+    newPuzzle('daily', { tier: len });
+  });
+}
 
 el.relaxedBtn.addEventListener('click', () => {
   newPuzzle('relaxed');
 });
 
 el.dailyStreakBadge.addEventListener('click', () => {
-  newPuzzle('daily');
+  newPuzzle('daily', { tier: nextUnplayedTier() });
 });
 
 el.pauseBtn.addEventListener('click', () => {
@@ -1215,7 +1255,7 @@ const TUTORIAL_STEPS = [
   },
   {
     title: 'Daily Puzzle & streaks',
-    body: 'Daily Puzzle gives everyone the same challenge each day — solve it once, then come back tomorrow for a new one. Solve it days in a row to build the 🔥 streak shown up top; missing a day resets it.',
+    body: 'Three Daily Puzzles a day — 4, 5, and 6 letters — give everyone the same challenges. Solving any one of them keeps your 🔥 streak alive; missing a whole day resets it. Come back tomorrow for three new ones.',
   },
   {
     title: 'Challenge a friend',
@@ -1285,6 +1325,7 @@ el.helpBtn.addEventListener('click', openTutorial);
 
 // ---------- Init ----------
 refreshDailyStreakBadge();
+refreshDailyTierButtons();
 
 const duelParam = new URLSearchParams(location.search).get('duel');
 const duelPayload = duelParam ? decodeDuelPayload(duelParam) : null;

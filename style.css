@@ -395,9 +395,17 @@ button:active {
   color: var(--danger);
 }
 
-#dailyBtn {
+.daily-tier-btn {
   border-color: var(--gold);
   color: var(--gold);
+}
+
+.daily-tier-btn.completed {
+  opacity: 0.6;
+}
+
+.daily-tier-btn.completed::after {
+  content: ' ✓';
 }
 
 #pauseBtn {
