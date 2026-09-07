@@ -176,17 +176,22 @@ h1 {
 .tiles {
   display: flex;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .tile {
   width: 42px;
-  height: 42px;
+  min-width: 0;
+  flex-shrink: 1;
+  aspect-ratio: 1 / 1;
+  height: auto;
   border: 2px solid var(--tile-border);
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
   font-size: 1.3rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -240,7 +245,6 @@ h1 {
 
 .ladder .tile {
   width: 36px;
-  height: 36px;
   font-size: 1.1rem;
 }
 
@@ -443,7 +447,6 @@ button:active {
 
 .tutorial-demo .tile {
   width: 38px;
-  height: 38px;
   font-size: 1.1rem;
 }
 
@@ -482,4 +485,57 @@ footer {
   color: var(--muted);
   font-size: 0.75rem;
   margin-top: 20px;
+}
+
+/* Narrow phones: tiles already never wrap (see .tiles/.tile above), but
+   shrink the label/gap/font proportionally too so a 6-letter word doesn't
+   just get squashed into tiny, cramped squares. */
+@media (max-width: 420px) {
+  .board {
+    padding: 14px;
+  }
+
+  .row-label,
+  .ladder .rung .row-label {
+    width: 38px;
+    font-size: 0.62rem;
+  }
+
+  .goal-row, .input-row {
+    gap: 8px;
+  }
+
+  .ladder .rung {
+    gap: 8px;
+  }
+
+  .tiles {
+    gap: 4px;
+  }
+
+  .tile {
+    font-size: 1.05rem;
+  }
+
+  .ladder .tile,
+  .tutorial-demo .tile {
+    font-size: 0.95rem;
+  }
+}
+
+@media (max-width: 340px) {
+  .row-label,
+  .ladder .rung .row-label {
+    width: 30px;
+    font-size: 0.56rem;
+  }
+
+  .tile {
+    font-size: 0.9rem;
+  }
+
+  .ladder .tile,
+  .tutorial-demo .tile {
+    font-size: 0.8rem;
+  }
 }
