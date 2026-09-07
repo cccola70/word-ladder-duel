@@ -8,6 +8,7 @@
   --accent-2: #a78bfa;
   --danger: #fb7185;
   --gold: #fbbf24;
+  --sky: #38bdf8;
   --tile-border: #2c3155;
 }
 
@@ -72,9 +73,9 @@ header {
 }
 
 .mode-badge.relaxed {
-  color: var(--accent);
-  background: rgba(94, 234, 212, 0.14);
-  border-color: rgba(94, 234, 212, 0.45);
+  color: var(--sky);
+  background: rgba(56, 189, 248, 0.14);
+  border-color: rgba(56, 189, 248, 0.45);
 }
 
 h1 {
@@ -355,8 +356,8 @@ button:active {
 }
 
 #relaxedBtn {
-  border-color: var(--accent-2);
-  color: var(--accent-2);
+  border-color: var(--sky);
+  color: var(--sky);
 }
 
 #resumeBtn {
