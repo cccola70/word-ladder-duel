@@ -1035,6 +1035,7 @@ const SOUNDS = {
   hint: () => { tone(660, 0, 0.08, 'sine', 0.1); tone(880, 0.09, 0.1, 'sine', 0.1); },
   win: () => { tone(523, 0, 0.12); tone(659, 0.12, 0.12); tone(784, 0.24, 0.22); },
   lose: () => { tone(300, 0, 0.15, 'sawtooth', 0.12); tone(200, 0.15, 0.22, 'sawtooth', 0.12); },
+  tick: () => tone(1000, 0, 0.045, 'square', 0.06),
 };
 function playSound(name) { const fn = SOUNDS[name]; if (fn) fn(); }
 
@@ -1154,7 +1155,28 @@ const state = {
   groupLobbyTimerId: null,
   muted: localStorage.getItem('wld_muted') === '1',
   paused: { manual: false, tutorial: false },
+  pausesUsed: 0,
 };
+
+// Timed solo rounds (Random/Daily) only get a couple of manual pauses each,
+// so the clock can't be stalled indefinitely for free thinking time. Duel
+// Challenge and Group Duel are exempt - you're only racing your own result
+// there, not stalling anyone else's clock, and untimed rounds have no clock
+// to protect in the first place.
+const MAX_TIMED_PAUSES = 2;
+function pausesAreLimited() {
+  return !isUntimed() && state.mode !== 'duel' && state.mode !== 'group';
+}
+function updatePauseButtonLabel() {
+  if (pausesAreLimited()) {
+    const left = Math.max(0, MAX_TIMED_PAUSES - state.pausesUsed);
+    el.pauseBtn.textContent = `⏸ Pause (${left} left)`;
+    el.pauseBtn.disabled = left === 0;
+  } else {
+    el.pauseBtn.textContent = '⏸ Pause';
+    el.pauseBtn.disabled = false;
+  }
+}
 
 // True while the current round has no clock - either Relaxed Mode itself,
 // a duel challenge, or a group duel whose creator set it up relaxed too.
@@ -1321,6 +1343,7 @@ function startTimer() {
     }
     el.timer.textContent = state.timeLeft;
     el.timer.classList.toggle('low', state.timeLeft <= 10);
+    if (state.timeLeft <= 10) playSound('tick');
   }, 1000);
 }
 
@@ -1623,6 +1646,7 @@ function newPuzzle(mode, opts) {
   el.duelResult.className = 'duel-result';
   el.groupResult.hidden = true;
   state.paused.manual = false;
+  state.pausesUsed = 0;
   el.pauseOverlay.classList.remove('visible');
   el.dailySetupOverlay.classList.remove('visible');
 
@@ -1665,6 +1689,7 @@ function newPuzzle(mode, opts) {
       showShareButton(existing.shareText);
       el.overlay.classList.add('visible');
       refreshDailyTierButtons();
+      updatePauseButtonLabel();
       return;
     }
   } else if (mode === 'duel') {
@@ -1737,6 +1762,7 @@ function newPuzzle(mode, opts) {
   el.wordInput.focus();
   updateStats();
   el.overlay.classList.remove('visible');
+  updatePauseButtonLabel();
   if (!untimed) {
     startTimer();
   }
@@ -2093,9 +2119,16 @@ el.dailyStreakBadge.addEventListener('click', () => {
 
 el.pauseBtn.addEventListener('click', () => {
   if (state.ended) return;
+  if (pausesAreLimited() && state.pausesUsed >= MAX_TIMED_PAUSES) {
+    setMessage("No pauses left this round - keep going!", 'error');
+    playSound('invalid');
+    return;
+  }
+  if (pausesAreLimited()) state.pausesUsed += 1;
   state.paused.manual = true;
   applyPauseState();
   el.pauseOverlay.classList.add('visible');
+  updatePauseButtonLabel();
 });
 
 el.resumeBtn.addEventListener('click', () => {

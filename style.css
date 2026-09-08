@@ -432,6 +432,11 @@ button:active {
   color: var(--muted);
 }
 
+#pauseBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 #relaxedBtn {
   border-color: var(--sky);
   color: var(--sky);
