@@ -169,6 +169,12 @@ h1 {
   box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
 
+/* Relaxed (and any other untimed) round: no clock, so the Time box doesn't
+   populate at all rather than showing a placeholder like an infinity sign. */
+.stats-bar.no-timer {
+  grid-template-columns: repeat(5, 1fr);
+}
+
 .stat {
   display: flex;
   flex-direction: column;
@@ -200,10 +206,6 @@ h1 {
 
 #timer.paused::after {
   content: ' ⏸';
-}
-
-#timer.infinite {
-  color: var(--muted);
 }
 
 @keyframes pulse {

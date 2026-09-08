@@ -1189,6 +1189,8 @@ function isUntimed() {
 // ---------- DOM ----------
 const el = {
   board: document.getElementById('board'),
+  statsBar: document.getElementById('statsBar'),
+  timeStat: document.getElementById('timeStat'),
   timer: document.getElementById('timer'),
   moves: document.getElementById('moves'),
   par: document.getElementById('par'),
@@ -1676,6 +1678,8 @@ function newPuzzle(mode, opts) {
       state.targetDist = bfsDistances(state.puzzle.graph, state.puzzle.target);
       clearInterval(state.timerId);
       el.timer.classList.remove('low');
+      el.timeStat.hidden = false;
+      el.statsBar.classList.remove('no-timer');
       el.timer.textContent = state.timeLeft;
       renderTiles(el.goalTiles, state.puzzle.target);
       renderLadder();
@@ -1743,12 +1747,13 @@ function newPuzzle(mode, opts) {
   state.targetDist = bfsDistances(state.puzzle.graph, state.puzzle.target);
   clearInterval(state.timerId);
   state.timerId = null;
-  el.timer.classList.remove('low', 'paused', 'infinite');
+  el.timer.classList.remove('low', 'paused');
   const untimed = isUntimed();
-  if (untimed) {
-    el.timer.textContent = '∞';
-    el.timer.classList.add('infinite');
-  } else {
+  // Untimed rounds (Relaxed Mode, or a relaxed-mode Duel/Group) have no
+  // clock at all, so the Time box shouldn't even populate on screen.
+  el.timeStat.hidden = untimed;
+  el.statsBar.classList.toggle('no-timer', untimed);
+  if (!untimed) {
     el.timer.textContent = state.timeLeft;
   }
   renderTiles(el.goalTiles, state.puzzle.target);
