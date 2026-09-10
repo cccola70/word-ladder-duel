@@ -231,6 +231,14 @@ h1 {
   margin-bottom: 10px;
 }
 
+/* GOAL sits at the bottom of the board (the ladder climbs down to it),
+   so give it a divider above to set it apart from the input area. */
+.goal-row {
+  margin-bottom: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--tile-border);
+}
+
 .row-label {
   width: 48px;
   flex-shrink: 0;
@@ -291,7 +299,7 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin: 14px 0;
+  margin: 0 0 10px;
   max-height: 260px;
   overflow-y: auto;
   padding-right: 4px;
