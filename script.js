@@ -1952,19 +1952,28 @@ function submitGuess() {
   }
 
   // Re-typing a word from earlier in the ladder backtracks to it: the ladder
-  // is cut back to that word. It still counts as a move (and in timed mode
-  // the clock keeps running with no +6s bonus), so a wrong turn has a cost.
+  // is cut back to that word. It counts as a move, and in timed modes it hands
+  // back 3s of the +6s bonus for each step undone - so typing filler words and
+  // then backtracking can't be used to farm the clock.
   const priorIdx = state.path.indexOf(guess);
   if (priorIdx !== -1) {
+    const undone = state.path.length - 1 - priorIdx;
     state.path = state.path.slice(0, priorIdx + 1);
     state.moves += 1;
+    let msg = `Backtracked to ${guess.toUpperCase()}.`;
+    if (!isUntimed()) {
+      const before = state.timeLeft;
+      state.timeLeft = Math.max(1, state.timeLeft - 3 * undone);
+      const lost = before - state.timeLeft;
+      if (lost > 0) msg += ` −${lost}s`;
+    }
     el.wordInput.value = '';
     el.wordInput.classList.remove('shake');
     renderInputTiles('', len);
     renderLadder();
     updateStats();
     playSound('move');
-    setMessage(`Backtracked to ${guess.toUpperCase()}.`);
+    setMessage(msg);
     el.wordInput.focus();
     return;
   }
@@ -2201,7 +2210,7 @@ const TUTORIAL_STEPS = [
   },
   {
     title: 'Hints, backtracking & scoring',
-    body: 'Stuck? Hint (−75 pts) reveals a valid next word, and Give Up reveals a full solution. Took a wrong turn? Type any earlier word in your ladder to jump back to it — that counts as a move. Your score rewards fewer moves and more time left on the clock.',
+    body: 'Stuck? Hint (−75 pts) reveals a valid next word, and Give Up reveals a full solution. Took a wrong turn? Type any earlier word in your ladder to jump back to it — that costs a move, and on the clock it hands back 3s per step undone. Your score rewards fewer moves and more time left on the clock.',
   },
   {
     title: 'Daily Puzzle & streaks',
