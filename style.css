@@ -274,8 +274,15 @@ h1 {
   transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease;
 }
 
+/* GOAL is a fixed endpoint - fill it and colour its label to match, so it
+   reads clearly as the target rather than just another row of tiles. */
 .goal-row .tile {
   border-color: var(--gold);
+  color: var(--gold);
+  background: rgba(251, 191, 36, 0.12);
+}
+
+.goal-row .row-label {
   color: var(--gold);
 }
 
@@ -326,6 +333,22 @@ h1 {
 .ladder .rung.current .tile {
   border-color: var(--accent-2);
   color: var(--accent-2);
+}
+
+/* START is the other fixed endpoint - give it the same filled, full-size
+   treatment as GOAL (in sky, not gold) so the two anchors stand out from
+   the smaller outlined steps in between. Listed after `.current` so at the
+   very first move, when the START rung is also the current one, START wins. */
+.ladder .rung.start .tile {
+  width: 42px;
+  font-size: 1.3rem;
+  border-color: var(--sky);
+  color: var(--sky);
+  background: rgba(56, 189, 248, 0.12);
+}
+
+.ladder .rung.start .row-label {
+  color: var(--sky);
 }
 
 #wordForm {

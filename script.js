@@ -1299,7 +1299,9 @@ function renderLadder() {
   el.ladder.innerHTML = '';
   state.path.forEach((word, idx) => {
     const rung = document.createElement('div');
-    rung.className = 'rung' + (idx === state.path.length - 1 ? ' current' : '');
+    rung.className = 'rung'
+      + (idx === 0 ? ' start' : '')
+      + (idx === state.path.length - 1 ? ' current' : '');
     const label = document.createElement('span');
     label.className = 'row-label';
     label.textContent = idx === 0 ? 'START' : `#${idx}`;
