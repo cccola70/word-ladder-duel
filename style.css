@@ -231,11 +231,11 @@ h1 {
   margin-bottom: 10px;
 }
 
-/* GOAL sits at the bottom of the board (the ladder climbs down to it),
-   so give it a divider above to set it apart from the input area. */
+/* Divider between the working rows (ladder + NEXT) and the GOAL + input
+   area beneath. GOAL is the first row below the rule. */
 .goal-row {
-  margin-bottom: 12px;
   padding-top: 14px;
+  margin-top: 4px;
   border-top: 1px solid var(--tile-border);
 }
 
