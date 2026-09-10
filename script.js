@@ -1950,9 +1950,25 @@ function submitGuess() {
   if (guess === cur) {
     return fail('That’s already your current word.');
   }
-  if (state.path.includes(guess)) {
-    return fail('You already used that word.');
+
+  // Re-typing a word from earlier in the ladder backtracks to it: the ladder
+  // is cut back to that word. It still counts as a move (and in timed mode
+  // the clock keeps running with no +6s bonus), so a wrong turn has a cost.
+  const priorIdx = state.path.indexOf(guess);
+  if (priorIdx !== -1) {
+    state.path = state.path.slice(0, priorIdx + 1);
+    state.moves += 1;
+    el.wordInput.value = '';
+    el.wordInput.classList.remove('shake');
+    renderInputTiles('', len);
+    renderLadder();
+    updateStats();
+    playSound('move');
+    setMessage(`Backtracked to ${guess.toUpperCase()}.`);
+    el.wordInput.focus();
+    return;
   }
+
   if (!graph.has(guess)) {
     return fail(`"${guess}" isn’t in the word list.`);
   }
@@ -2184,8 +2200,8 @@ const TUTORIAL_STEPS = [
     body: 'You start with 60 seconds and every valid move adds +6s, so good play buys you more time. Prefer no pressure at all? Switch to Relaxed Mode for the same puzzles with no clock.',
   },
   {
-    title: 'Hints & scoring',
-    body: 'Stuck? Hint (−75 pts) reveals a valid next word, and Give Up reveals a full solution. Your score rewards fewer moves and more time left on the clock.',
+    title: 'Hints, backtracking & scoring',
+    body: 'Stuck? Hint (−75 pts) reveals a valid next word, and Give Up reveals a full solution. Took a wrong turn? Type any earlier word in your ladder to jump back to it — that counts as a move. Your score rewards fewer moves and more time left on the clock.',
   },
   {
     title: 'Daily Puzzle & streaks',
