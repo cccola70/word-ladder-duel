@@ -1202,6 +1202,7 @@ const el = {
   inputTiles: document.getElementById('inputTiles'),
   wordForm: document.getElementById('wordForm'),
   wordInput: document.getElementById('wordInput'),
+  submitBtn: document.getElementById('submitBtn'),
   message: document.getElementById('message'),
   hintBtn: document.getElementById('hintBtn'),
   giveUpBtn: document.getElementById('giveUpBtn'),
@@ -1766,6 +1767,7 @@ function newPuzzle(mode, opts) {
     : 'Change one letter at a time to reach the goal word.');
   el.wordInput.value = '';
   el.wordInput.maxLength = state.puzzle.len;
+  el.wordInput.classList.remove('shake');
   el.wordInput.focus();
   updateStats();
   el.overlay.classList.remove('visible');
@@ -1930,6 +1932,12 @@ el.wordForm.addEventListener('submit', (e) => {
   submitGuess();
 });
 
+// Tapping Submit would otherwise move focus off the input and close the
+// mobile keyboard between words. Blocking the default on mousedown (which
+// mobile browsers synthesize before click) keeps focus on the input; the
+// click itself still fires and submits.
+el.submitBtn.addEventListener('mousedown', (e) => e.preventDefault());
+
 function submitGuess() {
   if (state.ended) return;
   const guess = el.wordInput.value.trim().toLowerCase();
@@ -1959,6 +1967,7 @@ function submitGuess() {
     state.timeLeft = Math.min(90, state.timeLeft + 6);
   }
   el.wordInput.value = '';
+  el.wordInput.classList.remove('shake');
   renderInputTiles('', len);
   renderLadder();
   updateStats();
@@ -1969,6 +1978,8 @@ function submitGuess() {
   } else {
     playSound('move');
     setMessage('Nice move! Keep going.', 'success');
+    // Keep the input focused so the mobile keyboard stays up for the next word.
+    el.wordInput.focus();
   }
 }
 
@@ -1978,6 +1989,8 @@ function fail(msg) {
   el.wordInput.classList.remove('shake');
   void el.wordInput.offsetWidth;
   el.wordInput.classList.add('shake');
+  // Stay focused so the keyboard doesn't drop while they fix the word.
+  el.wordInput.focus();
 }
 
 // ---------- Buttons ----------
